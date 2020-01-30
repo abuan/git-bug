@@ -14,7 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/MichaelMure/git-bug/bug"
+	//"github.com/MichaelMure/git-bug/bug"
 	"github.com/MichaelMure/git-bug/entity"
 	"github.com/MichaelMure/git-bug/identity"
 	"github.com/MichaelMure/git-bug/repository"
@@ -348,18 +348,18 @@ func (c *RepoCache) Fetch(remote string) (string, error) {
 	if err != nil {
 		return stdout1, err
 	}
-
+/*
 	stdout2, err := bug.Fetch(c.repo, remote)
 	if err != nil {
 		return stdout2, err
-	}
+	}*/
 
 	stdout3, err := story.Fetch(c.repo, remote)
 	if err != nil {
 		return stdout3, err
 	}
 
-	return stdout1 + stdout2 + stdout3, nil
+	return stdout1 + stdout3, nil
 }
 
 // MergeAll will merge all the available remote bug and identities
@@ -434,18 +434,18 @@ func (c *RepoCache) Push(remote string) (string, error) {
 	if err != nil {
 		return stdout1, err
 	}
-
+	/*
 	stdout2, err := bug.Push(c.repo, remote)
 	if err != nil {
 		return stdout2, err
-	}
+	}*/
 
 	stdout3, err := story.Push(c.repo, remote)
 	if err != nil {
 		return stdout3, err
 	}
 
-	return stdout1 + stdout2 + stdout3, nil
+	return stdout1 + stdout3, nil
 }
 
 // Pull will do a Fetch + MergeAll
@@ -472,7 +472,7 @@ func repoLockFilePath(repo repository.Repo) string {
 	return path.Join(repo.GetPath(), "git-bug", lockfile)
 }
 
-// repoIsAvailable check is the given repository is locked by a Cache.
+// repoIsAvailable check if the given repository is locked by a Cache.
 // Note: this is a smart function that will cleanup the lock file if the
 // corresponding process is not there anymore.
 // If no error is returned, the repo is free to edit.
