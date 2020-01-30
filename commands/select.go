@@ -13,7 +13,7 @@ import (
 
 func runSelect(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return errors.New("You must provide a bug id")
+		return errors.New("You must provide a story id")
 	}
 
 	backend, err := cache.NewRepoCache(repo)
@@ -25,31 +25,30 @@ func runSelect(cmd *cobra.Command, args []string) error {
 
 	prefix := args[0]
 
-	b, err := backend.ResolveBugPrefix(prefix)
+	s, err := backend.ResolveStoryPrefix(prefix)
 	if err != nil {
 		return err
 	}
 
-	err = _select.Select(backend, b.Id())
+	err = _select.Select(backend, s.Id())
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("selected bug %s: %s\n", b.Id().Human(), b.Snapshot().Title)
+	fmt.Printf("selected story %s: %s\n", s.Id().Human(), s.Snapshot().Title)
 
 	return nil
 }
 
 var selectCmd = &cobra.Command{
 	Use:   "select <id>",
-	Short: "Select a bug for implicit use in future commands.",
+	Short: "Select a story for implicit use in future commands.",
 	Example: `git bug select 2f15
-git bug comment
 git bug status
 `,
-	Long: `Select a bug for implicit use in future commands.
+	Long: `Select a story for implicit use in future commands.
 
-This command allows you to omit any bug <id> argument, for example:
+This command allows you to omit any story <id> argument, for example:
   git bug show
 instead of
   git bug show 2f153ca

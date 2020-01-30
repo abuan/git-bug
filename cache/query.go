@@ -64,19 +64,9 @@ func ParseQuery(query string) (*Query, error) {
 			f := ParticipantFilter(qualifierQuery)
 			result.Participant = append(result.Participant, f)
 
-		case "label":
-			f := LabelFilter(qualifierQuery)
-			result.Label = append(result.Label, f)
-
 		case "title":
 			f := TitleFilter(qualifierQuery)
 			result.Title = append(result.Title, f)
-
-		case "no":
-			err := result.parseNoFilter(qualifierQuery)
-			if err != nil {
-				return nil, err
-			}
 
 		case "sort":
 			if sortingDone {
@@ -125,17 +115,6 @@ func removeQuote(field string) string {
 		}
 	}
 	return field
-}
-
-func (q *Query) parseNoFilter(query string) error {
-	switch query {
-	case "label":
-		q.NoFilters = append(q.NoFilters, NoLabelFilter())
-	default:
-		return fmt.Errorf("unknown \"no\" filter %s", query)
-	}
-
-	return nil
 }
 
 func (q *Query) parseSorting(query string) error {

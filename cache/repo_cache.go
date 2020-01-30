@@ -18,12 +18,15 @@ import (
 	"github.com/MichaelMure/git-bug/entity"
 	"github.com/MichaelMure/git-bug/identity"
 	"github.com/MichaelMure/git-bug/repository"
-	"github.com/MichaelMure/git-bug/util/git"
+	//"github.com/MichaelMure/git-bug/util/git"
 	"github.com/MichaelMure/git-bug/util/process"
+
+	"github.com/MichaelMure/git-bug/story"
 )
 
 const bugCacheFile = "bug-cache"
 const identityCacheFile = "identity-cache"
+const storyCacheFile= "story-cache"
 
 // 1: original format
 // 2: added cache for identities with a reference in the bug cache
@@ -57,10 +60,15 @@ type RepoCache struct {
 	// the underlying repo
 	repo repository.ClockedRepo
 
-	// excerpt of bugs data for all bugs
+	/* // excerpt of bugs data for all bugs
 	bugExcerpts map[entity.Id]*BugExcerpt
 	// bug loaded in memory
-	bugs map[entity.Id]*BugCache
+	bugs map[entity.Id]*BugCache */
+
+	// excerpt of stories data for all stories
+	storyExcerpts map[entity.Id]*StoryExcerpt
+	// stories loaded in memory
+	stories map[entity.Id]*StoryCache
 
 	// excerpt of identities data for all identities
 	identitiesExcerpts map[entity.Id]*IdentityExcerpt
@@ -74,8 +82,9 @@ type RepoCache struct {
 func NewRepoCache(r repository.ClockedRepo) (*RepoCache, error) {
 	c := &RepoCache{
 		repo:       r,
-		bugs:       make(map[entity.Id]*BugCache),
+		//bugs:       make(map[entity.Id]*BugCache),
 		identities: make(map[entity.Id]*IdentityCache),
+		stories:    make(map[entity.Id]*StoryCache),
 	}
 
 	err := c.lock()
@@ -159,25 +168,13 @@ func (c *RepoCache) lock() error {
 func (c *RepoCache) Close() error {
 	c.identities = make(map[entity.Id]*IdentityCache)
 	c.identitiesExcerpts = nil
-	c.bugs = make(map[entity.Id]*BugCache)
-	c.bugExcerpts = nil
+	/* c.bugs = make(map[entity.Id]*BugCache)
+	c.bugExcerpts = nil */
+	c.stories = make(map[entity.Id]*StoryCache)
+	c.storyExcerpts = nil
 
 	lockPath := repoLockFilePath(c.repo)
 	return os.Remove(lockPath)
-}
-
-// bugUpdated is a callback to trigger when the excerpt of a bug changed,
-// that is each time a bug is updated
-func (c *RepoCache) bugUpdated(id entity.Id) error {
-	b, ok := c.bugs[id]
-	if !ok {
-		panic("missing bug in the cache")
-	}
-
-	c.bugExcerpts[id] = NewBugExcerpt(b.bug, b.Snapshot())
-
-	// we only need to write the bug cache
-	return c.writeBugCache()
 }
 
 // identityUpdated is a callback to trigger when the excerpt of an identity
@@ -196,40 +193,17 @@ func (c *RepoCache) identityUpdated(id entity.Id) error {
 
 // load will try to read from the disk all the cache files
 func (c *RepoCache) load() error {
-	err := c.loadBugCache()
+	/* err := c.loadBugCache()
+	if err != nil {
+		return err
+	} */
+
+	err := c.loadStoryCache()
 	if err != nil {
 		return err
 	}
+
 	return c.loadIdentityCache()
-}
-
-// load will try to read from the disk the bug cache file
-func (c *RepoCache) loadBugCache() error {
-	f, err := os.Open(bugCacheFilePath(c.repo))
-	if err != nil {
-		return err
-	}
-
-	decoder := gob.NewDecoder(f)
-
-	aux := struct {
-		Version  uint
-		Excerpts map[entity.Id]*BugExcerpt
-	}{}
-
-	err = decoder.Decode(&aux)
-	if err != nil {
-		return err
-	}
-
-	if aux.Version != 2 {
-		return ErrInvalidCacheFormat{
-			message: fmt.Sprintf("unknown cache format version %v", aux.Version),
-		}
-	}
-
-	c.bugExcerpts = aux.Excerpts
-	return nil
 }
 
 // load will try to read from the disk the identity cache file
@@ -263,43 +237,17 @@ func (c *RepoCache) loadIdentityCache() error {
 
 // write will serialize on disk all the cache files
 func (c *RepoCache) write() error {
-	err := c.writeBugCache()
+	/* err := c.writeBugCache()
+	if err != nil {
+		return err
+	} */
+
+	err := c.writeStoryCache()
 	if err != nil {
 		return err
 	}
+
 	return c.writeIdentityCache()
-}
-
-// write will serialize on disk the bug cache file
-func (c *RepoCache) writeBugCache() error {
-	var data bytes.Buffer
-
-	aux := struct {
-		Version  uint
-		Excerpts map[entity.Id]*BugExcerpt
-	}{
-		Version:  formatVersion,
-		Excerpts: c.bugExcerpts,
-	}
-
-	encoder := gob.NewEncoder(&data)
-
-	err := encoder.Encode(aux)
-	if err != nil {
-		return err
-	}
-
-	f, err := os.Create(bugCacheFilePath(c.repo))
-	if err != nil {
-		return err
-	}
-
-	_, err = f.Write(data.Bytes())
-	if err != nil {
-		return err
-	}
-
-	return f.Close()
 }
 
 // write will serialize on disk the identity cache file
@@ -334,10 +282,6 @@ func (c *RepoCache) writeIdentityCache() error {
 	return f.Close()
 }
 
-func bugCacheFilePath(repo repository.Repo) string {
-	return path.Join(repo.GetPath(), "git-bug", bugCacheFile)
-}
-
 func identityCacheFilePath(repo repository.Repo) string {
 	return path.Join(repo.GetPath(), "git-bug", identityCacheFile)
 }
@@ -359,7 +303,7 @@ func (c *RepoCache) buildCache() error {
 
 	_, _ = fmt.Fprintln(os.Stderr, "Done.")
 
-	_, _ = fmt.Fprintf(os.Stderr, "Building bug cache... ")
+	/* _, _ = fmt.Fprintf(os.Stderr, "Building bug cache... ")
 
 	c.bugExcerpts = make(map[entity.Id]*BugExcerpt)
 
@@ -374,220 +318,28 @@ func (c *RepoCache) buildCache() error {
 		c.bugExcerpts[b.Bug.Id()] = NewBugExcerpt(b.Bug, &snap)
 	}
 
+	_, _ = fmt.Fprintln(os.Stderr, "Done.") */
+
+	_, _ = fmt.Fprintf(os.Stderr, "Building story cache... ")
+
+	c.storyExcerpts = make(map[entity.Id]*StoryExcerpt)
+
+	allStories := story.ReadAllLocalStories(c.repo)
+
+	for s := range allStories {
+		if s.Err != nil {
+			return s.Err
+		}
+
+		snap := s.Story.Compile()
+		c.storyExcerpts[s.Story.Id()] = NewStoryExcerpt(s.Story, &snap)
+	}
+
 	_, _ = fmt.Fprintln(os.Stderr, "Done.")
+
 	return nil
 }
 
-// ResolveBug retrieve a bug matching the exact given id
-func (c *RepoCache) ResolveBug(id entity.Id) (*BugCache, error) {
-	cached, ok := c.bugs[id]
-	if ok {
-		return cached, nil
-	}
-
-	b, err := bug.ReadLocalBug(c.repo, id)
-	if err != nil {
-		return nil, err
-	}
-
-	cached = NewBugCache(c, b)
-	c.bugs[id] = cached
-
-	return cached, nil
-}
-
-// ResolveBugExcerpt retrieve a BugExcerpt matching the exact given id
-func (c *RepoCache) ResolveBugExcerpt(id entity.Id) (*BugExcerpt, error) {
-	e, ok := c.bugExcerpts[id]
-	if !ok {
-		return nil, bug.ErrBugNotExist
-	}
-
-	return e, nil
-}
-
-// ResolveBugPrefix retrieve a bug matching an id prefix. It fails if multiple
-// bugs match.
-func (c *RepoCache) ResolveBugPrefix(prefix string) (*BugCache, error) {
-	// preallocate but empty
-	matching := make([]entity.Id, 0, 5)
-
-	for id := range c.bugExcerpts {
-		if id.HasPrefix(prefix) {
-			matching = append(matching, id)
-		}
-	}
-
-	if len(matching) > 1 {
-		return nil, bug.NewErrMultipleMatchBug(matching)
-	}
-
-	if len(matching) == 0 {
-		return nil, bug.ErrBugNotExist
-	}
-
-	return c.ResolveBug(matching[0])
-}
-
-// ResolveBugCreateMetadata retrieve a bug that has the exact given metadata on
-// its Create operation, that is, the first operation. It fails if multiple bugs
-// match.
-func (c *RepoCache) ResolveBugCreateMetadata(key string, value string) (*BugCache, error) {
-	// preallocate but empty
-	matching := make([]entity.Id, 0, 5)
-
-	for id, excerpt := range c.bugExcerpts {
-		if excerpt.CreateMetadata[key] == value {
-			matching = append(matching, id)
-		}
-	}
-
-	if len(matching) > 1 {
-		return nil, bug.NewErrMultipleMatchBug(matching)
-	}
-
-	if len(matching) == 0 {
-		return nil, bug.ErrBugNotExist
-	}
-
-	return c.ResolveBug(matching[0])
-}
-
-// QueryBugs return the id of all Bug matching the given Query
-func (c *RepoCache) QueryBugs(query *Query) []entity.Id {
-	if query == nil {
-		return c.AllBugsIds()
-	}
-
-	var filtered []*BugExcerpt
-
-	for _, excerpt := range c.bugExcerpts {
-		if query.Match(c, excerpt) {
-			filtered = append(filtered, excerpt)
-		}
-	}
-
-	var sorter sort.Interface
-
-	switch query.OrderBy {
-	case OrderById:
-		sorter = BugsById(filtered)
-	case OrderByCreation:
-		sorter = BugsByCreationTime(filtered)
-	case OrderByEdit:
-		sorter = BugsByEditTime(filtered)
-	default:
-		panic("missing sort type")
-	}
-
-	if query.OrderDirection == OrderDescending {
-		sorter = sort.Reverse(sorter)
-	}
-
-	sort.Sort(sorter)
-
-	result := make([]entity.Id, len(filtered))
-
-	for i, val := range filtered {
-		result[i] = val.Id
-	}
-
-	return result
-}
-
-// AllBugsIds return all known bug ids
-func (c *RepoCache) AllBugsIds() []entity.Id {
-	result := make([]entity.Id, len(c.bugExcerpts))
-
-	i := 0
-	for _, excerpt := range c.bugExcerpts {
-		result[i] = excerpt.Id
-		i++
-	}
-
-	return result
-}
-
-// ValidLabels list valid labels
-//
-// Note: in the future, a proper label policy could be implemented where valid
-// labels are defined in a configuration file. Until that, the default behavior
-// is to return the list of labels already used.
-func (c *RepoCache) ValidLabels() []bug.Label {
-	set := map[bug.Label]interface{}{}
-
-	for _, excerpt := range c.bugExcerpts {
-		for _, l := range excerpt.Labels {
-			set[l] = nil
-		}
-	}
-
-	result := make([]bug.Label, len(set))
-
-	i := 0
-	for l := range set {
-		result[i] = l
-		i++
-	}
-
-	// Sort
-	sort.Slice(result, func(i, j int) bool {
-		return string(result[i]) < string(result[j])
-	})
-
-	return result
-}
-
-// NewBug create a new bug
-// The new bug is written in the repository (commit)
-func (c *RepoCache) NewBug(title string, message string) (*BugCache, *bug.CreateOperation, error) {
-	return c.NewBugWithFiles(title, message, nil)
-}
-
-// NewBugWithFiles create a new bug with attached files for the message
-// The new bug is written in the repository (commit)
-func (c *RepoCache) NewBugWithFiles(title string, message string, files []git.Hash) (*BugCache, *bug.CreateOperation, error) {
-	author, err := c.GetUserIdentity()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return c.NewBugRaw(author, time.Now().Unix(), title, message, files, nil)
-}
-
-// NewBugWithFilesMeta create a new bug with attached files for the message, as
-// well as metadata for the Create operation.
-// The new bug is written in the repository (commit)
-func (c *RepoCache) NewBugRaw(author *IdentityCache, unixTime int64, title string, message string, files []git.Hash, metadata map[string]string) (*BugCache, *bug.CreateOperation, error) {
-	b, op, err := bug.CreateWithFiles(author.Identity, unixTime, title, message, files)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for key, value := range metadata {
-		op.SetMetadata(key, value)
-	}
-
-	err = b.Commit(c.repo)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if _, has := c.bugs[b.Id()]; has {
-		return nil, nil, fmt.Errorf("bug %s already exist in the cache", b.Id())
-	}
-
-	cached := NewBugCache(c, b)
-	c.bugs[b.Id()] = cached
-
-	// force the write of the excerpt
-	err = c.bugUpdated(b.Id())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return cached, op, nil
-}
 
 // Fetch retrieve updates from a remote
 // This does not change the local bugs or identities state
@@ -602,7 +354,12 @@ func (c *RepoCache) Fetch(remote string) (string, error) {
 		return stdout2, err
 	}
 
-	return stdout1 + stdout2, nil
+	stdout3, err := story.Fetch(c.repo, remote)
+	if err != nil {
+		return stdout3, err
+	}
+
+	return stdout1 + stdout2 + stdout3, nil
 }
 
 // MergeAll will merge all the available remote bug and identities
@@ -628,7 +385,7 @@ func (c *RepoCache) MergeAll(remote string) <-chan entity.MergeResult {
 			}
 		}
 
-		results = bug.MergeAll(c.repo, remote)
+		/* results = bug.MergeAll(c.repo, remote)
 		for result := range results {
 			out <- result
 
@@ -641,6 +398,22 @@ func (c *RepoCache) MergeAll(remote string) <-chan entity.MergeResult {
 				b := result.Entity.(*bug.Bug)
 				snap := b.Compile()
 				c.bugExcerpts[result.Id] = NewBugExcerpt(b, &snap)
+			}
+		} */
+
+		results = story.MergeAll(c.repo, remote)
+		for result := range results {
+			out <- result
+
+			if result.Err != nil {
+				continue
+			}
+
+			switch result.Status {
+			case entity.MergeStatusNew, entity.MergeStatusUpdated:
+				s := result.Entity.(*story.Story)
+				snap := s.Compile()
+				c.storyExcerpts[result.Id] = NewStoryExcerpt(s, &snap)
 			}
 		}
 
@@ -667,7 +440,12 @@ func (c *RepoCache) Push(remote string) (string, error) {
 		return stdout2, err
 	}
 
-	return stdout1 + stdout2, nil
+	stdout3, err := story.Push(c.repo, remote)
+	if err != nil {
+		return stdout3, err
+	}
+
+	return stdout1 + stdout2 + stdout3, nil
 }
 
 // Pull will do a Fetch + MergeAll
@@ -920,3 +698,556 @@ func (c *RepoCache) NewIdentityRaw(name string, email string, login string, avat
 
 	return cached, nil
 }
+
+//**************************  Fonction pour Story  **************************
+// NewStory create a new story
+// The new story is written in the repository (commit)
+func (c *RepoCache) NewStory(title string, description string, effort int) (*StoryCache, *story.CreateOperation, error) {
+	author, err := c.GetUserIdentity()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.NewStoryRaw(author, time.Now().Unix(), title, description,effort, nil)
+}
+
+
+// NewStoryRaw create a new story with metadata for the Create operation.
+// The new story is written in the repository (commit)
+func (c *RepoCache) NewStoryRaw(author *IdentityCache, unixTime int64, title string, description string, effort int, metadata map[string]string) (*StoryCache, *story.CreateOperation, error) {
+	s, op, err := story.Create(author.Identity, unixTime, title, description, effort)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for key, value := range metadata {
+		op.SetMetadata(key, value)
+	}
+
+	err = s.Commit(c.repo)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if _, has := c.stories[s.Id()]; has {
+		return nil, nil, fmt.Errorf("story %s already exist in the cache", s.Id())
+	}
+
+	cached := NewStoryCache(c, s)
+	c.stories[s.Id()] = cached
+
+	// force the write of the excerpt
+	err = c.storyUpdated(s.Id())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cached, op, nil
+}
+
+// storyUpdated is a callback to trigger when the excerpt of a story changed,
+// that is each time a story is updated
+func (c *RepoCache) storyUpdated(id entity.Id) error {
+	s, ok := c.stories[id]
+	if !ok {
+		panic("missing story in the cache")
+	}
+
+	c.storyExcerpts[id] = NewStoryExcerpt(s.story, s.Snapshot())
+
+	// we only need to write the story cache
+	return c.writeStoryCache()
+}
+
+// load will try to read from the disk the Story cache file
+func (c *RepoCache) loadStoryCache() error {
+	f, err := os.Open(storyCacheFilePath(c.repo))
+	if err != nil {
+		return err
+	}
+
+	decoder := gob.NewDecoder(f)
+
+	aux := struct {
+		Version  uint
+		Excerpts map[entity.Id]*StoryExcerpt
+	}{}
+
+	err = decoder.Decode(&aux)
+	if err != nil {
+		return err
+	}
+
+	if aux.Version != 2 {
+		return ErrInvalidCacheFormat{
+			message: fmt.Sprintf("unknown cache format version %v", aux.Version),
+		}
+	}
+
+	c.storyExcerpts = aux.Excerpts
+	return nil
+}
+
+func storyCacheFilePath(repo repository.Repo) string {
+	return path.Join(repo.GetPath(), "git-bug", storyCacheFile)
+}
+
+// write will serialize on disk the story cache file
+func (c *RepoCache) writeStoryCache() error {
+	var data bytes.Buffer
+
+	aux := struct {
+		Version  uint
+		Excerpts map[entity.Id]*StoryExcerpt
+	}{
+		Version:  formatVersion,
+		Excerpts: c.storyExcerpts,
+	}
+
+	encoder := gob.NewEncoder(&data)
+
+	err := encoder.Encode(aux)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(storyCacheFilePath(c.repo))
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(data.Bytes())
+	if err != nil {
+		return err
+	}
+
+	return f.Close()
+}
+
+
+// ResolveStory retrieve a story matching the exact given id
+func (c *RepoCache) ResolveStory(id entity.Id) (*StoryCache, error) {
+	cached, ok := c.stories[id]
+	if ok {
+		return cached, nil
+	}
+
+	b, err := story.ReadLocalStory(c.repo, id)
+	if err != nil {
+		return nil, err
+	}
+
+	cached = NewStoryCache(c, b)
+	c.stories[id] = cached
+
+	return cached, nil
+}
+
+// ResolveStoryExcerpt retrieve a StoryExcerpt matching the exact given id
+func (c *RepoCache) ResolveStoryExcerpt(id entity.Id) (*StoryExcerpt, error) {
+	e, ok := c.storyExcerpts[id]
+	if !ok {
+		return nil, story.ErrStoryNotExist
+	}
+
+	return e, nil
+}
+
+// ResolveStoryPrefix retrieve a story matching an id prefix. It fails if multiple
+// stories match.
+func (c *RepoCache) ResolveStoryPrefix(prefix string) (*StoryCache, error) {
+	// preallocate but empty
+	matching := make([]entity.Id, 0, 5)
+
+	for id := range c.storyExcerpts {
+		if id.HasPrefix(prefix) {
+			matching = append(matching, id)
+		}
+	}
+
+	if len(matching) > 1 {
+		return nil, story.NewErrMultipleMatchStory(matching)
+	}
+
+	if len(matching) == 0 {
+		return nil, story.ErrStoryNotExist
+	}
+
+	return c.ResolveStory(matching[0])
+}
+
+// ResolveStoryCreateMetadata retrieve a story that has the exact given metadata on
+// its Create operation, that is, the first operation. It fails if multiple stories
+// match.
+func (c *RepoCache) ResolveStoryCreateMetadata(key string, value string) (*StoryCache, error) {
+	// preallocate but empty
+	matching := make([]entity.Id, 0, 5)
+
+	for id, excerpt := range c.storyExcerpts {
+		if excerpt.CreateMetadata[key] == value {
+			matching = append(matching, id)
+		}
+	}
+
+	if len(matching) > 1 {
+		return nil, story.NewErrMultipleMatchStory(matching)
+	}
+
+	if len(matching) == 0 {
+		return nil, story.ErrStoryNotExist
+	}
+
+	return c.ResolveStory(matching[0])
+}
+
+
+// QueryStories return the id of all Story matching the given Query
+func (c *RepoCache) QueryStories(query *Query) []entity.Id {
+	if query == nil {
+		return c.AllStoriesIds()
+	}
+
+	var filtered []*StoryExcerpt
+
+	for _, excerpt := range c.storyExcerpts {
+		if query.Match(c, excerpt) {
+			filtered = append(filtered, excerpt)
+		}
+	}
+
+	var sorter sort.Interface
+
+	switch query.OrderBy {
+	case OrderById:
+		sorter = StoriesById(filtered)
+	case OrderByCreation:
+		sorter = StoriesByCreationTime(filtered)
+	case OrderByEdit:
+		sorter = StoriesByEditTime(filtered)
+	default:
+		panic("missing sort type")
+	}
+
+	sort.Sort(sorter)
+
+	result := make([]entity.Id, len(filtered))
+
+	for i, val := range filtered {
+		result[i] = val.Id
+	}
+
+	return result
+}
+
+// AllStoriesIds return all known story ids
+func (c *RepoCache) AllStoriesIds() []entity.Id {
+	result := make([]entity.Id, len(c.storyExcerpts))
+
+	i := 0
+	for _, excerpt := range c.storyExcerpts {
+		result[i] = excerpt.Id
+		i++
+	}
+
+	return result
+}
+
+//************ DEPRECATED ********************
+
+//**************************  Fonction pour Bug  **************************
+//Fonctions commentées car inutilisées, liées aui model de données Bug 
+
+
+/* // ResolveBug retrieve a bug matching the exact given id
+func (c *RepoCache) ResolveBug(id entity.Id) (*BugCache, error) {
+	cached, ok := c.bugs[id]
+	if ok {
+		return cached, nil
+	}
+
+	b, err := bug.ReadLocalBug(c.repo, id)
+	if err != nil {
+		return nil, err
+	}
+
+	cached = NewBugCache(c, b)
+	c.bugs[id] = cached
+
+	return cached, nil
+}
+
+// ResolveBugExcerpt retrieve a BugExcerpt matching the exact given id
+func (c *RepoCache) ResolveBugExcerpt(id entity.Id) (*BugExcerpt, error) {
+	e, ok := c.bugExcerpts[id]
+	if !ok {
+		return nil, bug.ErrBugNotExist
+	}
+
+	return e, nil
+}
+
+// ResolveBugPrefix retrieve a bug matching an id prefix. It fails if multiple
+// bugs match.
+func (c *RepoCache) ResolveBugPrefix(prefix string) (*BugCache, error) {
+	// preallocate but empty
+	matching := make([]entity.Id, 0, 5)
+
+	for id := range c.bugExcerpts {
+		if id.HasPrefix(prefix) {
+			matching = append(matching, id)
+		}
+	}
+
+	if len(matching) > 1 {
+		return nil, bug.NewErrMultipleMatchBug(matching)
+	}
+
+	if len(matching) == 0 {
+		return nil, bug.ErrBugNotExist
+	}
+
+	return c.ResolveBug(matching[0])
+}
+
+// ResolveBugCreateMetadata retrieve a bug that has the exact given metadata on
+// its Create operation, that is, the first operation. It fails if multiple bugs
+// match.
+func (c *RepoCache) ResolveBugCreateMetadata(key string, value string) (*BugCache, error) {
+	// preallocate but empty
+	matching := make([]entity.Id, 0, 5)
+
+	for id, excerpt := range c.bugExcerpts {
+		if excerpt.CreateMetadata[key] == value {
+			matching = append(matching, id)
+		}
+	}
+
+	if len(matching) > 1 {
+		return nil, bug.NewErrMultipleMatchBug(matching)
+	}
+
+	if len(matching) == 0 {
+		return nil, bug.ErrBugNotExist
+	}
+
+	return c.ResolveBug(matching[0])
+}
+
+
+// QueryBugs return the id of all Bug matching the given Query
+func (c *RepoCache) QueryBugs(query *Query) []entity.Id {
+	
+	if query == nil {
+		return c.AllBugsIds()
+	}
+
+	var filtered []*BugExcerpt
+
+	for _, excerpt := range c.bugExcerpts {
+		if query.Match(c, excerpt) {
+			filtered = append(filtered, excerpt)
+		}
+	}
+
+	var sorter sort.Interface
+
+	switch query.OrderBy {
+	case OrderById:
+		sorter = BugsById(filtered)
+	case OrderByCreation:
+		sorter = BugsByCreationTime(filtered)
+	case OrderByEdit:
+		sorter = BugsByEditTime(filtered)
+	default:
+		panic("missing sort type")
+	}
+
+	if query.OrderDirection == OrderDescending {
+		sorter = sort.Reverse(sorter)
+	}
+
+	sort.Sort(sorter)
+
+	result := make([]entity.Id, len(filtered))
+
+	for i, val := range filtered {
+		result[i] = val.Id
+	}
+
+	return result
+	
+	return nil
+}
+
+// AllBugsIds return all known bug ids
+func (c *RepoCache) AllBugsIds() []entity.Id {
+	result := make([]entity.Id, len(c.bugExcerpts))
+
+	i := 0
+	for _, excerpt := range c.bugExcerpts {
+		result[i] = excerpt.Id
+		i++
+	}
+
+	return result
+}
+
+// ValidLabels list valid labels
+//
+// Note: in the future, a proper label policy could be implemented where valid
+// labels are defined in a configuration file. Until that, the default behavior
+// is to return the list of labels already used.
+func (c *RepoCache) ValidLabels() []bug.Label {
+	set := map[bug.Label]interface{}{}
+
+	for _, excerpt := range c.bugExcerpts {
+		for _, l := range excerpt.Labels {
+			set[l] = nil
+		}
+	}
+
+	result := make([]bug.Label, len(set))
+
+	i := 0
+	for l := range set {
+		result[i] = l
+		i++
+	}
+
+	// Sort
+	sort.Slice(result, func(i, j int) bool {
+		return string(result[i]) < string(result[j])
+	})
+
+	return result
+}
+
+// NewBug create a new bug
+// The new bug is written in the repository (commit)
+func (c *RepoCache) NewBug(title string, message string) (*BugCache, *bug.CreateOperation, error) {
+	return c.NewBugWithFiles(title, message, nil)
+}
+
+// NewBugWithFiles create a new bug with attached files for the message
+// The new bug is written in the repository (commit)
+func (c *RepoCache) NewBugWithFiles(title string, message string, files []git.Hash) (*BugCache, *bug.CreateOperation, error) {
+	author, err := c.GetUserIdentity()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.NewBugRaw(author, time.Now().Unix(), title, message, files, nil)
+}
+
+// NewBugWithFilesMeta create a new bug with attached files for the message, as
+// well as metadata for the Create operation.
+// The new bug is written in the repository (commit)
+func (c *RepoCache) NewBugRaw(author *IdentityCache, unixTime int64, title string, message string, files []git.Hash, metadata map[string]string) (*BugCache, *bug.CreateOperation, error) {
+	b, op, err := bug.CreateWithFiles(author.Identity, unixTime, title, message, files)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for key, value := range metadata {
+		op.SetMetadata(key, value)
+	}
+
+	err = b.Commit(c.repo)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if _, has := c.bugs[b.Id()]; has {
+		return nil, nil, fmt.Errorf("bug %s already exist in the cache", b.Id())
+	}
+
+	cached := NewBugCache(c, b)
+	c.bugs[b.Id()] = cached
+
+	// force the write of the excerpt
+	err = c.bugUpdated(b.Id())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cached, op, nil
+}
+
+// write will serialize on disk the bug cache file
+func (c *RepoCache) writeBugCache() error {
+	var data bytes.Buffer
+
+	aux := struct {
+		Version  uint
+		Excerpts map[entity.Id]*BugExcerpt
+	}{
+		Version:  formatVersion,
+		Excerpts: c.bugExcerpts,
+	}
+
+	encoder := gob.NewEncoder(&data)
+
+	err := encoder.Encode(aux)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(bugCacheFilePath(c.repo))
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(data.Bytes())
+	if err != nil {
+		return err
+	}
+
+	return f.Close()
+}
+
+// bugUpdated is a callback to trigger when the excerpt of a bug changed,
+// that is each time a bug is updated
+func (c *RepoCache) bugUpdated(id entity.Id) error {
+	b, ok := c.bugs[id]
+	if !ok {
+		panic("missing bug in the cache")
+	}
+
+	c.bugExcerpts[id] = NewBugExcerpt(b.bug, b.Snapshot())
+
+	// we only need to write the bug cache
+	return c.writeBugCache()
+}
+
+// load will try to read from the disk the bug cache file
+func (c *RepoCache) loadBugCache() error {
+	f, err := os.Open(bugCacheFilePath(c.repo))
+	if err != nil {
+		return err
+	}
+
+	decoder := gob.NewDecoder(f)
+
+	aux := struct {
+		Version  uint
+		Excerpts map[entity.Id]*BugExcerpt
+	}{}
+
+	err = decoder.Decode(&aux)
+	if err != nil {
+		return err
+	}
+
+	if aux.Version != 2 {
+		return ErrInvalidCacheFormat{
+			message: fmt.Sprintf("unknown cache format version %v", aux.Version),
+		}
+	}
+
+	c.bugExcerpts = aux.Excerpts
+	return nil
+}
+
+func bugCacheFilePath(repo repository.Repo) string {
+	return path.Join(repo.GetPath(), "git-bug", bugCacheFile)
+} */

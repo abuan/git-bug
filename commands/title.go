@@ -17,12 +17,12 @@ func runTitle(cmd *cobra.Command, args []string) error {
 	defer backend.Close()
 	interrupt.RegisterCleaner(backend.Close)
 
-	b, args, err := _select.ResolveBug(backend, args)
+	s, args, err := _select.ResolveStory(backend, args)
 	if err != nil {
 		return err
 	}
 
-	snap := b.Snapshot()
+	snap := s.Snapshot()
 
 	fmt.Println(snap.Title)
 
@@ -31,7 +31,7 @@ func runTitle(cmd *cobra.Command, args []string) error {
 
 var titleCmd = &cobra.Command{
 	Use:     "title [<id>]",
-	Short:   "Display or change a title of a bug.",
+	Short:   "Display or change a title of a story.",
 	PreRunE: loadRepo,
 	RunE:    runTitle,
 }

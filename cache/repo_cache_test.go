@@ -36,21 +36,21 @@ func TestCache(t *testing.T) {
 	require.Len(t, cache.identitiesExcerpts, 2)
 	require.Len(t, cache.identities, 2)
 
-	// Create a bug
-	bug1, _, err := cache.NewBug("title", "message")
+	// Create a story
+	story1, _, err := cache.NewStory("title", "descript",1)
 	require.NoError(t, err)
 
-	// It's possible to create two identical bugs
-	bug2, _, err := cache.NewBug("title", "message")
+	// It's possible to create two identical stories
+	story2, _, err := cache.NewStory("title", "descript",1)
 	require.NoError(t, err)
 
-	// two identical bugs yield a different id
-	require.NotEqual(t, bug1.Id(), bug2.Id())
+	// two identical stories yield a different id
+	require.NotEqual(t, story1.Id(), story2.Id())
 
-	// There is now two bugs in the cache
-	require.Len(t, cache.AllBugsIds(), 2)
-	require.Len(t, cache.bugExcerpts, 2)
-	require.Len(t, cache.bugs, 2)
+	// There is now two stories in the cache
+	require.Len(t, cache.AllStoriesIds(), 2)
+	require.Len(t, cache.storyExcerpts, 2)
+	require.Len(t, cache.stories, 2)
 
 	// Resolving
 	_, err = cache.ResolveIdentity(iden1.Id())
@@ -60,30 +60,30 @@ func TestCache(t *testing.T) {
 	_, err = cache.ResolveIdentityPrefix(iden1.Id().String()[:10])
 	require.NoError(t, err)
 
-	_, err = cache.ResolveBug(bug1.Id())
+	_, err = cache.ResolveStory(story1.Id())
 	require.NoError(t, err)
-	_, err = cache.ResolveBugExcerpt(bug1.Id())
+	_, err = cache.ResolveStoryExcerpt(story1.Id())
 	require.NoError(t, err)
-	_, err = cache.ResolveBugPrefix(bug1.Id().String()[:10])
+	_, err = cache.ResolveStoryPrefix(story1.Id().String()[:10])
 	require.NoError(t, err)
 
 	// Querying
 	query, err := ParseQuery("status:open author:descartes sort:edit-asc")
 	require.NoError(t, err)
-	require.Len(t, cache.QueryBugs(query), 2)
+	require.Len(t, cache.QueryStories(query), 2)
 
 	// Close
 	require.NoError(t, cache.Close())
-	require.Empty(t, cache.bugs)
-	require.Empty(t, cache.bugExcerpts)
+	require.Empty(t, cache.stories)
+	require.Empty(t, cache.storyExcerpts)
 	require.Empty(t, cache.identities)
 	require.Empty(t, cache.identitiesExcerpts)
 
 	// Reload, only excerpt are loaded
 	require.NoError(t, cache.load())
-	require.Empty(t, cache.bugs)
+	require.Empty(t, cache.stories)
 	require.Empty(t, cache.identities)
-	require.Len(t, cache.bugExcerpts, 2)
+	require.Len(t, cache.storyExcerpts, 2)
 	require.Len(t, cache.identitiesExcerpts, 2)
 
 	// Resolving load from the disk
@@ -94,11 +94,11 @@ func TestCache(t *testing.T) {
 	_, err = cache.ResolveIdentityPrefix(iden1.Id().String()[:10])
 	require.NoError(t, err)
 
-	_, err = cache.ResolveBug(bug1.Id())
+	_, err = cache.ResolveStory(story1.Id())
 	require.NoError(t, err)
-	_, err = cache.ResolveBugExcerpt(bug1.Id())
+	_, err = cache.ResolveStoryExcerpt(story1.Id())
 	require.NoError(t, err)
-	_, err = cache.ResolveBugPrefix(bug1.Id().String()[:10])
+	_, err = cache.ResolveStoryPrefix(story1.Id().String()[:10])
 	require.NoError(t, err)
 }
 
@@ -124,8 +124,8 @@ func TestPushPull(t *testing.T) {
 	err = cacheB.Pull("origin")
 	require.NoError(t, err)
 
-	// Create a bug in A
-	_, _, err = cacheA.NewBug("bug1", "message")
+	// Create a story in A
+	_, _, err = cacheA.NewStory("story1", "descript",1)
 	require.NoError(t, err)
 
 	// A --> remote --> B
@@ -135,7 +135,7 @@ func TestPushPull(t *testing.T) {
 	err = cacheB.Pull("origin")
 	require.NoError(t, err)
 
-	require.Len(t, cacheB.AllBugsIds(), 1)
+	require.Len(t, cacheB.AllStoriesIds(), 1)
 
 	// retrieve and set identity
 	reneB, err := cacheB.ResolveIdentity(reneA.Id())
@@ -145,7 +145,7 @@ func TestPushPull(t *testing.T) {
 	require.NoError(t, err)
 
 	// B --> remote --> A
-	_, _, err = cacheB.NewBug("bug2", "message")
+	_, _, err = cacheB.NewStory("story2", "descript",1)
 	require.NoError(t, err)
 
 	_, err = cacheB.Push("origin")
@@ -154,5 +154,5 @@ func TestPushPull(t *testing.T) {
 	err = cacheA.Pull("origin")
 	require.NoError(t, err)
 
-	require.Len(t, cacheA.AllBugsIds(), 2)
+	require.Len(t, cacheA.AllStoriesIds(), 2)
 }

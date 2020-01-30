@@ -3,27 +3,27 @@ package cache
 import (
 	"strings"
 
-	"github.com/MichaelMure/git-bug/bug"
+	"github.com/MichaelMure/git-bug/story"
 )
 
-// Filter is a predicate that match a subset of bugs
-type Filter func(repoCache *RepoCache, excerpt *BugExcerpt) bool
+// Filter is a predicate that match a subset of stories
+type Filter func(repoCache *RepoCache, excerpt *StoryExcerpt) bool
 
-// StatusFilter return a Filter that match a bug status
+// StatusFilter return a Filter that match a story status
 func StatusFilter(query string) (Filter, error) {
-	status, err := bug.StatusFromString(query)
+	status, err := story.StatusFromString(query)
 	if err != nil {
 		return nil, err
 	}
 
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
+	return func(repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 		return excerpt.Status == status
 	}, nil
 }
 
-// AuthorFilter return a Filter that match a bug author
+// AuthorFilter return a Filter that match a story author
 func AuthorFilter(query string) Filter {
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
+	return func(repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 		query = strings.ToLower(query)
 
 		// Normal identity
@@ -42,21 +42,9 @@ func AuthorFilter(query string) Filter {
 	}
 }
 
-// LabelFilter return a Filter that match a label
-func LabelFilter(label string) Filter {
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
-		for _, l := range excerpt.Labels {
-			if string(l) == label {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-// ActorFilter return a Filter that match a bug actor
+// ActorFilter return a Filter that match a story actor
 func ActorFilter(query string) Filter {
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
+	return func(repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 		query = strings.ToLower(query)
 
 		for _, id := range excerpt.Actors {
@@ -73,9 +61,9 @@ func ActorFilter(query string) Filter {
 	}
 }
 
-// ParticipantFilter return a Filter that match a bug participant
+// ParticipantFilter return a Filter that match a story participant
 func ParticipantFilter(query string) Filter {
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
+	return func(repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 		query = strings.ToLower(query)
 
 		for _, id := range excerpt.Participants {
@@ -94,18 +82,11 @@ func ParticipantFilter(query string) Filter {
 
 // TitleFilter return a Filter that match if the title contains the given query
 func TitleFilter(query string) Filter {
-	return func(repo *RepoCache, excerpt *BugExcerpt) bool {
+	return func(repo *RepoCache, excerpt *StoryExcerpt) bool {
 		return strings.Contains(
 			strings.ToLower(excerpt.Title),
 			strings.ToLower(query),
 		)
-	}
-}
-
-// NoLabelFilter return a Filter that match the absence of labels
-func NoLabelFilter() Filter {
-	return func(repoCache *RepoCache, excerpt *BugExcerpt) bool {
-		return len(excerpt.Labels) == 0
 	}
 }
 
@@ -115,13 +96,11 @@ type Filters struct {
 	Author      []Filter
 	Actor       []Filter
 	Participant []Filter
-	Label       []Filter
 	Title       []Filter
-	NoFilters   []Filter
 }
 
-// Match check if a bug match the set of filters
-func (f *Filters) Match(repoCache *RepoCache, excerpt *BugExcerpt) bool {
+// Match check if a story match the set of filters
+func (f *Filters) Match(repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 	if match := f.orMatch(f.Status, repoCache, excerpt); !match {
 		return false
 	}
@@ -138,14 +117,6 @@ func (f *Filters) Match(repoCache *RepoCache, excerpt *BugExcerpt) bool {
 		return false
 	}
 
-	if match := f.andMatch(f.Label, repoCache, excerpt); !match {
-		return false
-	}
-
-	if match := f.andMatch(f.NoFilters, repoCache, excerpt); !match {
-		return false
-	}
-
 	if match := f.andMatch(f.Title, repoCache, excerpt); !match {
 		return false
 	}
@@ -153,8 +124,8 @@ func (f *Filters) Match(repoCache *RepoCache, excerpt *BugExcerpt) bool {
 	return true
 }
 
-// Check if any of the filters provided match the bug
-func (*Filters) orMatch(filters []Filter, repoCache *RepoCache, excerpt *BugExcerpt) bool {
+// Check if any of the filters provided match the story
+func (*Filters) orMatch(filters []Filter, repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 	if len(filters) == 0 {
 		return true
 	}
@@ -167,8 +138,8 @@ func (*Filters) orMatch(filters []Filter, repoCache *RepoCache, excerpt *BugExce
 	return match
 }
 
-// Check if all of the filters provided match the bug
-func (*Filters) andMatch(filters []Filter, repoCache *RepoCache, excerpt *BugExcerpt) bool {
+// Check if all of the filters provided match the story
+func (*Filters) andMatch(filters []Filter, repoCache *RepoCache, excerpt *StoryExcerpt) bool {
 	if len(filters) == 0 {
 		return true
 	}

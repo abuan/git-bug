@@ -1,13 +1,12 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/MichaelMure/git-bug/cache"
 	_select "github.com/MichaelMure/git-bug/commands/select"
-	"github.com/MichaelMure/git-bug/util/colors"
+	//"github.com/MichaelMure/git-bug/util/colors"
 	"github.com/MichaelMure/git-bug/util/interrupt"
 	"github.com/spf13/cobra"
 )
@@ -16,7 +15,7 @@ var (
 	showFieldsQuery string
 )
 
-func runShowBug(cmd *cobra.Command, args []string) error {
+func runShowStory(cmd *cobra.Command, args []string) error {
 	backend, err := cache.NewRepoCache(repo)
 	if err != nil {
 		return err
@@ -24,35 +23,26 @@ func runShowBug(cmd *cobra.Command, args []string) error {
 	defer backend.Close()
 	interrupt.RegisterCleaner(backend.Close)
 
-	b, args, err := _select.ResolveBug(backend, args)
+	s, args, err := _select.ResolveStory(backend, args)
 	if err != nil {
 		return err
 	}
 
-	snapshot := b.Snapshot()
+	snapshot := s.Snapshot()
 
-	if len(snapshot.Comments) == 0 {
-		return errors.New("invalid bug: no comment")
-	}
-
-	firstComment := snapshot.Comments[0]
 
 	if showFieldsQuery != "" {
 		switch showFieldsQuery {
 		case "author":
-			fmt.Printf("%s\n", firstComment.Author.DisplayName())
+			fmt.Printf("%s\n", snapshot.Author.DisplayName())
 		case "authorEmail":
-			fmt.Printf("%s\n", firstComment.Author.Email())
+			fmt.Printf("%s\n", snapshot.Author.Email())
 		case "createTime":
-			fmt.Printf("%s\n", firstComment.FormatTime())
+			fmt.Printf("%s\n", snapshot.CreatedAt)
 		case "humanId":
 			fmt.Printf("%s\n", snapshot.Id().Human())
 		case "id":
 			fmt.Printf("%s\n", snapshot.Id())
-		case "labels":
-			for _, l := range snapshot.Labels {
-				fmt.Printf("%s\n", l.String())
-			}
 		case "actors":
 			for _, a := range snapshot.Actors {
 				fmt.Printf("%s\n", a.DisplayName())
@@ -75,25 +65,17 @@ func runShowBug(cmd *cobra.Command, args []string) error {
 	}
 
 	// Header
-	fmt.Printf("[%s] %s %s\n\n",
-		colors.Yellow(snapshot.Status),
-		colors.Cyan(snapshot.Id().Human()),
+	fmt.Printf("[%s] %s %s\nDescription : %s \nEffort : %d\n\n",
+		snapshot.Status,
+		snapshot.Id().Human(),
 		snapshot.Title,
+		snapshot.Description,
+		snapshot.Effort,
 	)
 
-	fmt.Printf("%s opened this issue %s\n\n",
-		colors.Magenta(firstComment.Author.DisplayName()),
-		firstComment.FormatTimeRel(),
-	)
-
-	// Labels
-	var labels = make([]string, len(snapshot.Labels))
-	for i := range snapshot.Labels {
-		labels[i] = string(snapshot.Labels[i])
-	}
-
-	fmt.Printf("labels: %s\n",
-		strings.Join(labels, ", "),
+	fmt.Printf("%s opened this story %s\n\n",
+		snapshot.Author.DisplayName(),
+		snapshot.CreatedAt,
 	)
 
 	// Actors
@@ -116,42 +98,18 @@ func runShowBug(cmd *cobra.Command, args []string) error {
 		strings.Join(participants, ", "),
 	)
 
-	// Comments
-	indent := "  "
-
-	for i, comment := range snapshot.Comments {
-		var message string
-		fmt.Printf("%s#%d %s <%s>\n\n",
-			indent,
-			i,
-			comment.Author.DisplayName(),
-			comment.Author.Email(),
-		)
-
-		if comment.Message == "" {
-			message = colors.GreyBold("No description provided.")
-		} else {
-			message = comment.Message
-		}
-
-		fmt.Printf("%s%s\n\n\n",
-			indent,
-			message,
-		)
-	}
-
 	return nil
 }
 
 var showCmd = &cobra.Command{
 	Use:     "show [<id>]",
-	Short:   "Display the details of a bug.",
+	Short:   "Display the details of a Story.",
 	PreRunE: loadRepo,
-	RunE:    runShowBug,
+	RunE:    runShowStory,
 }
 
 func init() {
 	RootCmd.AddCommand(showCmd)
 	showCmd.Flags().StringVarP(&showFieldsQuery, "field", "f", "",
-		"Select field to display. Valid values are [author,authorEmail,createTime,humanId,id,labels,shortId,status,title,actors,participants]")
+		"Select field to display. Valid values are [author,authorEmail,createTime,humanId,id,shortId,status,title,actors,participants]")
 }

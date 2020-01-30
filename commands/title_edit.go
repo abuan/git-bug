@@ -5,7 +5,6 @@ import (
 
 	"github.com/MichaelMure/git-bug/cache"
 	"github.com/MichaelMure/git-bug/commands/select"
-	"github.com/MichaelMure/git-bug/input"
 	"github.com/MichaelMure/git-bug/util/interrupt"
 	"github.com/spf13/cobra"
 )
@@ -22,39 +21,33 @@ func runTitleEdit(cmd *cobra.Command, args []string) error {
 	defer backend.Close()
 	interrupt.RegisterCleaner(backend.Close)
 
-	b, args, err := _select.ResolveBug(backend, args)
+	s, args, err := _select.ResolveStory(backend, args)
 	if err != nil {
 		return err
 	}
 
-	snap := b.Snapshot()
+	snap := s.Snapshot()
 
 	if titleEditTitle == "" {
-		titleEditTitle, err = input.BugTitleEditorInput(repo, snap.Title)
-		if err == input.ErrEmptyTitle {
-			fmt.Println("Empty title, aborting.")
+			fmt.Println("Empty title, you must provide a new title to the story, aborting.")
 			return nil
-		}
-		if err != nil {
-			return err
-		}
 	}
 
 	if titleEditTitle == snap.Title {
 		fmt.Println("No change, aborting.")
 	}
 
-	_, err = b.SetTitle(titleEditTitle)
+	_, err = s.SetTitle(titleEditTitle)
 	if err != nil {
 		return err
 	}
 
-	return b.Commit()
+	return s.Commit()
 }
 
 var titleEditCmd = &cobra.Command{
 	Use:     "edit [<id>]",
-	Short:   "Edit a title of a bug.",
+	Short:   "Edit a title of a story.",
 	PreRunE: loadRepoEnsureUser,
 	RunE:    runTitleEdit,
 }

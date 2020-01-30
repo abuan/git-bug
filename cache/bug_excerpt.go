@@ -1,5 +1,8 @@
 package cache
 
+//************ DEPRECATED ********************
+
+/* 
 import (
 	"encoding/gob"
 	"fmt"
@@ -101,9 +104,8 @@ func NewBugExcerpt(b bug.Interface, snap *bug.Snapshot) *BugExcerpt {
 	return e
 }
 
-/*
- * Sorting
- */
+// Sorting
+ 
 
 type BugsById []*BugExcerpt
 
@@ -174,3 +176,4 @@ func (b BugsByEditTime) Less(i, j int) bool {
 func (b BugsByEditTime) Swap(i, j int) {
 	b[i], b[j] = b[j], b[i]
 }
+ */

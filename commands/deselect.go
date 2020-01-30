@@ -25,10 +25,10 @@ func runDeselect(cmd *cobra.Command, args []string) error {
 
 var deselectCmd = &cobra.Command{
 	Use:   "deselect",
-	Short: "Clear the implicitly selected bug.",
+	Short: "Clear the implicitly selected story.",
 	Example: `git bug select 2f15
-git bug comment
 git bug status
+git bug show
 git bug deselect
 `,
 	PreRunE: loadRepo,

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/MichaelMure/git-bug/cache"
-	"github.com/MichaelMure/git-bug/util/colors"
 	"github.com/MichaelMure/git-bug/util/interrupt"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +23,7 @@ func runUserLs(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Printf("%s %s\n",
-			colors.Cyan(i.Id.Human()),
+			i.Id.Human(),
 			i.DisplayName(),
 		)
 	}

@@ -7,7 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/MichaelMure/git-bug/bug"
+	//"github.com/MichaelMure/git-bug/bug"
+	"github.com/MichaelMure/git-bug/story"
 	"github.com/MichaelMure/git-bug/identity"
 	"github.com/MichaelMure/git-bug/repository"
 )
@@ -20,11 +21,11 @@ var repo repository.ClockedRepo
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   rootCommandName,
-	Short: "A bug tracker embedded in Git.",
-	Long: `git-bug is a bug tracker embedded in git.
+	Short: "A User Story manager embedded in Git.",
+	Long: `git-bug is a User Story manager embedded in git.
 
-git-bug use git objects to store the bug tracking separated from the files
-history. As bugs are regular git objects, they can be pushed and pulled from/to
+git-bug use git objects to store the User Story separated from the files
+history. As Story are regular git objects, they can be pushed and pulled from/to
 the same git remote your are already using to collaborate with other peoples.
 
 `,
@@ -63,7 +64,7 @@ func loadRepo(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to get the current working directory: %q", err)
 	}
 
-	repo, err = repository.NewGitRepo(cwd, bug.Witnesser)
+	repo, err = repository.NewGitRepo(cwd, story.Witnesser)
 	if err == repository.ErrNotARepo {
 		return fmt.Errorf("%s must be run from within a git repo", rootCommandName)
 	}

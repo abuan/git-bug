@@ -23,22 +23,22 @@ func runLsID(cmd *cobra.Command, args []string) error {
 		prefix = args[0]
 	}
 
-	for _, id := range backend.AllBugsIds() {
+	for _, id := range backend.AllStoriesIds() {
 		if prefix == "" || id.HasPrefix(prefix) {
-			fmt.Println(id)
+			fmt.Println(id.Human())
 		}
 	}
 
 	return nil
 }
 
-var listBugIDCmd = &cobra.Command{
+var listStoryIDCmd = &cobra.Command{
 	Use:     "ls-id [<prefix>]",
-	Short:   "List bug identifiers.",
+	Short:   "List story identifiers.",
 	PreRunE: loadRepo,
 	RunE:    runLsID,
 }
 
 func init() {
-	RootCmd.AddCommand(listBugIDCmd)
+	RootCmd.AddCommand(listStoryIDCmd)
 }

@@ -1,5 +1,7 @@
 package cache
 
+//************ DEPRECATED ********************
+/* 
 import (
 	"fmt"
 	"time"
@@ -269,3 +271,4 @@ func (c *BugCache) CommitAsNeeded() error {
 func (c *BugCache) NeedCommit() bool {
 	return c.bug.NeedCommit()
 }
+ */
